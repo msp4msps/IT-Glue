@@ -17,6 +17,10 @@
 
 )
 
+###Additional API Permissions Need for App in Azure AD ####
+
+####DeviceManagementConfiguration.Read.All
+####DeviceManagementManagedDevices.Read.All
 
 
 ###MICROSOFT SECRETS#####
