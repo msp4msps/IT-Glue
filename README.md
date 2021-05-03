@@ -18,13 +18,13 @@ Document all devices enrolled into Intune as a new Flexible Asset. The script cr
 </ul>
 <div>All devices are listed for the customer as a new flexible asset.</div>
 <br>
-<a target="_blank" href="/Images/pic3.png">
-<img src="/Images/pic3.png" alt="Download SPPKG file screenshot" style="max-width:100%;">
+<a target="_blank" href="/Images/pic5.png">
+<img src="/Images/pic5.png" alt="Download SPPKG file screenshot" style="max-width:100%;">
 </a>
 <br>
 <a target="_blank" href="/Images/pic4.png">
 <img src="/Images/pic4.png" alt="Download SPPKG file screenshot" style="max-width:100%;">
-</a>
+</a> 
 
 <h2>Prerequisites</h2>
 You will need to garner tokens and GUIDs from both the Secure Application Model and Syncro. The secure application model allows for a headless connection into all of your customer environments. The script to run that can be found from Kelvin over at CyberDrain. <a href="https://github.com/KelvinTegelaar/SecureAppModel/blob/master/Create-SecureAppModel.ps1">Click here to go to that page in Github.</a>
