@@ -1,4 +1,4 @@
-﻿Param
+Param
 (
 
 [cmdletbinding()]
@@ -16,6 +16,7 @@
     [string]$APIEndpoint
 
 )
+
 
 ###Additional API Permissions Need for App in Azure AD ####
 
@@ -163,8 +164,9 @@ if (!$FilterID) {
                         attributes = @{
                             order          = 10
                             name           = "Configurations"
-                            kind           = "Text"
-                            required       = $true
+                            'tag-type'     = "Configurations"
+                            kind           = "Tag"
+                            required       = $false
                             "show-in-list" = $true
                         }
                     }
@@ -180,12 +182,31 @@ if (!$FilterID) {
 
 #Grab all IT-Glue contacts to match the domain name.
 write-host "Getting IT-Glue contact list" -foregroundColor green
-$i = 0
-do {
-    $AllITGlueContacts += (Get-ITGlueContacts -page_size 1000 -page_number $i).data.attributes
+$i = 1
+$AllITGlueContacts = do {
+    $Contacts = (Get-ITGlueContacts -page_size 1000 -page_number $i).data.attributes
     $i++
-    Write-Host "Retrieved $($AllITGlueContacts.count) Contacts" -ForegroundColor Yellow
-}while ($AllITGlueContacts.count % 1000 -eq 0 -and $AllITGlueContacts.count -ne 0) 
+    $Contacts
+    Write-Host "Retrieved $($Contacts.count) Contacts" -ForegroundColor Yellow
+}while ($Contacts.count % 1000 -eq 0 -and $Contacts.count -ne 0) 
+
+
+$i=1
+$AllITGlueConfigurations = do {
+    $Configs = (Get-ITGlueConfigurations -page_size 1000 -page_number $i).data
+    $i++
+    $Configs
+    Write-Host "Retrieved $($Configs.count) Configurations" -ForegroundColor Yellow
+}while ($Configs.count % 1000 -eq 0 -and $Configs.count -ne 0) 
+
+$DomainList = foreach ($Contact in $AllITGlueContacts) {
+    $ITGDomain = ($contact.'contact-emails'.value -split "@")[1]
+    [PSCustomObject]@{
+        Domain   = $ITGDomain
+        OrgID    = $Contact.'organization-id'
+        Combined = "$($ITGDomain)$($Contact.'organization-id')"
+    }
+} 
 
 
 ###Connect to your Own Partner Center to get a list of customers/tenantIDs #########
@@ -205,23 +226,21 @@ foreach ($customer in $customers) {
     ###Get Access Token########
     $CustomerToken = New-PartnerAccessToken -ApplicationId $ApplicationId -Credential $credential -RefreshToken $refreshToken -Scopes 'https://graph.microsoft.com/.default' -Tenant $customer.TenantID
     $headers = @{ "Authorization" = "Bearer $($CustomerToken.AccessToken)" }
-    $domain = $customer.DefaultDomainName
-
     $Devices = ""
 
     #####Get Intune information if it is available####
     try{
     $Devices = (Invoke-RestMethod -Uri 'https://graph.microsoft.com/beta/deviceManagement/managedDevices' -Headers $headers -Method Get -ContentType "application/json").value | Select-Object deviceName, ownerType, operatingSystem, osVersion, complianceState,userPrincipalName, autopilotEnrolled,isEncrypted, serialNumber
     }catch{('This tenant either does not have intune licensing or you have not added the correct permissions to the which are listed in the begining of this script')} 
-    $configurations = (Get-ITGlueConfigurations).data.attributes
+
     if($Devices){
        forEach($device in $Devices){
-        forEach($configuration in $configurations){
-            if($configuration.'serial-number' -eq $device.serialNumber){
-                $configExist = $configuration.name
+        forEach($configuration in $AllITGlueConfigurations){
+            if($configuration.attributes.'serial-number' -eq $device.serialNumber){
+                $configExist = $configuration
                 Write-Host "Existing Configuration Found in ITGlue" -ForegroundColor Cyan
             } else {
-                $configExist = "No configuration exist"
+                $configExist = ""
             }
         }
         $FlexAssetBody =
@@ -238,12 +257,17 @@ foreach ($customer in $customers) {
              'autopilot-enrolled'       = $device.autopilotEnrolled | Out-String
              'encrypted'                = $device.isEncrypted | Out-String
              'serial-number'            = $device.serialNumber
-             'configurations'           = $configExist
+             'configurations'           = $configExist.id
             }
         }
     }
     Write-Host "Finding $($customer.name) in IT-Glue" -ForegroundColor Green
-    $orgID = ($AllITGlueContacts | Where-Object { $_.'contact-emails'.value -match $domain}).'organization-id' | Select-Object -Unique
+    $CustomerDomains = Get-MsolDomain -TenantId $Customer.TenantId
+    $orgid = foreach ($customerDomain in $customerdomains) {
+        ($domainList | Where-Object { $_.domain -eq $customerDomain.name }).'OrgID'
+    }
+
+    $orgID = $orgid | Select-Object -Unique
     if(!$orgID){
        Write-Host "$($customer.name) does not exist in IT-Glue" -ForegroundColor Red
     }
